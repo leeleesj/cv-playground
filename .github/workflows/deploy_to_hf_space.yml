@@ -8,10 +8,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (full history)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Push to Hugging Face Space
         env:
@@ -23,4 +24,4 @@ jobs:
           SPACE_ID="sjleee/cv-playground"
 
           git remote add hf "https://user:${HF_TOKEN}@huggingface.co/spaces/${SPACE_ID}.git" || true
-          git push hf HEAD:main --force
+          git push hf main:main --force
