@@ -1,0 +1,26 @@
+name: Deploy to Hugging Face Space
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          SPACE_ID="sjleee/cv-playground"
+
+          git remote add hf "https://user:${HF_TOKEN}@huggingface.co/spaces/${SPACE_ID}.git" || true
+          git push hf HEAD:main --force
