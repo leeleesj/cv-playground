@@ -9,19 +9,27 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository (full history)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1   # 히스토리 필요 없음
 
-      - name: Push to Hugging Face Space
+      - name: Push snapshot to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           SPACE_ID="sjleee/cv-playground"
-
           git remote add hf "https://user:${HF_TOKEN}@huggingface.co/spaces/${SPACE_ID}.git" || true
-          git push hf main:main --force
+
+          # 현재 워킹트리 "스냅샷"만 올리기: 과거 히스토리/바이너리 blob 전부 제거
+          git checkout --orphan hf-deploy
+          git add -A
+          git commit -m "Deploy snapshot from GitHub"
+
+          # HF main 브랜치를 스냅샷 1커밋으로 덮어씀
+          git push hf hf-deploy:main --force
