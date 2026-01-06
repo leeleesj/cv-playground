@@ -1,68 +1,117 @@
 import gradio as gr
 import numpy as np
-import cv2
 
-# utils
-def _to_bgr(image_rgb: np.ndarray) -> np.ndarray:
+from src.operators import laplacian, sobel
+
+# ----------------------------
+# Wrappers for UI callbacks
+# ----------------------------
+def run_laplacian(image_rgb: np.ndarray, ksize: int, use_abs: bool):
+    out, meta = laplacian(image_rgb, ksize=int(ksize), use_abs=bool(use_abs))
+    return out, meta
+
+
+def run_sobel(image_rgb: np.ndarray, ksize: int, mode: str):
+    out, meta = sobel(image_rgb, ksize=int(ksize), mode=mode)
+    return out, meta
+
+
+def run_fft_placeholder(image_rgb: np.ndarray):
+    # TODO
     if image_rgb is None:
-        return None
-    return cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+        return None, {"status": "no_image"}
+    h, w = image_rgb.shape[:2]
+    return image_rgb, {"status": "ok", "op": "fft", "note": "placeholder", "shape": [h, w]}
 
-def _to_rgb(image_bgr: np.ndarray) -> np.ndarray:
-    if image_bgr is None:
-        return None
-    return cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-def _resize_image(image_bgr: np.ndarray, long_edge: int) -> np.ndarray:
-    if image_bgr is None:
-        return None
-    h, w = image_bgr.shape[:2]
-    if max(h, w) <= long_edge:
-        return image_bgr
-    if h >= w:
-        new_h = long_edge
-        new_w = int(w * (long_edge / h))
-    else:
-        new_w = long_edge
-        new_h = int(h * (long_edge / w))
-    return cv2.resize(image_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+# ----------------------------
+# UI
+# ----------------------------
+with gr.Blocks(title="CV Playground") as demo:
+    gr.Markdown(
+        """
+# CV Playground
+This is a simple tool to visualize and inspect metadata of various computer vision operators.
+        """.strip()
+    )
 
-# Interface function
-def preview_only(image_rgb: np.ndarray, long_edge: int):
-    if image_rgb is None:
-        return None, "No image provided."
+    with gr.Row():
+        # LEFT: shared input
+        with gr.Column(scale=1, min_width=360):
+            inp = gr.Image(type="numpy", label="Input image (RGB)")
+            gr.Examples(
+                examples=[
+                    "assets/example/lisboa_tail.jpg",
+                    "assets/example/lisboa.jpg",
+                ],
+                inputs=inp,
+                label="Example images",
+            )
 
-    bgr = _to_bgr(image_rgb)
-    bgr = _resize_image(bgr, long_edge)
-    rgb = _to_rgb(bgr)
+        # RIGHT: results (tabs)
+        with gr.Column(scale=1, min_width=520):
+            with gr.Tabs():
+                # ---------------- Laplacian ----------------
+                with gr.TabItem("Laplacian"):
+                    with gr.Row():
+                        lap_ksize = gr.Radio(
+                            choices=[1, 3, 5],
+                            value=3,
+                            label="Kernel size (ksize)",
+                        )
+                        lap_abs = gr.Checkbox(value=True, label="abs() for visualization")
 
-    meta = {
-        "status": "ok",
-        "shape_hwc": list(rgb.shape),
-        "dtype": str(rgb.dtype),
-        "long_edge": int(long_edge),
-    }
-    return rgb, str(meta)
+                    lap_out = gr.Image(type="numpy", label="Laplacian output", interactive=False)
+                    lap_meta = gr.JSON(label="Metadata")
 
-demo = gr.Interface(
-    fn=preview_only,
-    inputs=[
-        gr.Image(type="numpy", label="Input image (RGB)"),
-        gr.Slider(
-            minimum=64,
-            maximum=2048,
-            value=1024,
-            step=64,
-            label="Resize long edge",
-        ),
-    ],
-    outputs=[
-        gr.Image(type="numpy", label="Preview (resized)"),
-        gr.Textbox(label="Metadata", interactive=False),
-    ],
-    title="CV Playground (Basics)",
-    description="Upload an image and resize it by long edge.",
-)
+                    lap_btn = gr.Button("Run Laplacian", variant="primary")
+
+                # ---------------- Sobel ----------------
+                with gr.TabItem("Sobel"):
+                    with gr.Row():
+                        sobel_ksize = gr.Radio(
+                            choices=[1, 3, 5],
+                            value=3,
+                            label="Kernel size (ksize)",
+                        )
+                        sobel_mode = gr.Radio(
+                            choices=["magnitude", "x", "y"],
+                            value="magnitude",
+                            label="Mode",
+                        )
+
+                    sobel_out = gr.Image(type="numpy", label="Sobel output", interactive=False)
+                    sobel_meta = gr.JSON(label="Metadata")
+
+                    sobel_btn = gr.Button("Run Sobel", variant="primary")
+
+                # ---------------- FFT (placeholder) ----------------
+                with gr.TabItem("FFT"):
+                    gr.Markdown("TODO: FFT magnitude (log), radial energy, high-frequency ratio")
+                    fft_out = gr.Image(type="numpy", label="FFT output (placeholder)", interactive=False)
+                    fft_meta = gr.JSON(label="Metadata")
+
+                    fft_btn = gr.Button("Run FFT (placeholder)", variant="primary")
+
+    # --- Button triggers (explicit runs) ---
+    lap_btn.click(
+        fn=run_laplacian,
+        inputs=[inp, lap_ksize, lap_abs],
+        outputs=[lap_out, lap_meta],
+    )
+
+    sobel_btn.click(
+        fn=run_sobel,
+        inputs=[inp, sobel_ksize, sobel_mode],
+        outputs=[sobel_out, sobel_meta],
+    )
+
+    fft_btn.click(
+        fn=run_fft_placeholder,
+        inputs=[inp],
+        outputs=[fft_out, fft_meta],
+    )
+
 
 if __name__ == "__main__":
     demo.launch()
