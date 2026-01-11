@@ -1,7 +1,7 @@
 import gradio as gr
 import numpy as np
 
-from src.operators import laplacian, sobel
+from src.operators import laplacian, sobel, fft_spectrum
 
 # ----------------------------
 # Wrappers for UI callbacks
@@ -16,12 +16,14 @@ def run_sobel(image_rgb: np.ndarray, ksize: int, mode: str):
     return out, meta
 
 
-def run_fft_placeholder(image_rgb: np.ndarray):
-    # TODO
-    if image_rgb is None:
-        return None, {"status": "no_image"}
-    h, w = image_rgb.shape[:2]
-    return image_rgb, {"status": "ok", "op": "fft", "note": "placeholder", "shape": [h, w]}
+def run_fft(image_rgb: np.ndarray, log_scale: bool, center: bool, hf_radius_ratio: float):
+    out, meta = fft_spectrum(
+        image_rgb,
+        log_scale=bool(log_scale),
+        center=bool(center),
+        hf_radius_ratio=float(hf_radius_ratio),
+    )
+    return out, meta
 
 
 # ----------------------------
@@ -87,11 +89,21 @@ This is a simple tool to visualize and inspect metadata of various computer visi
 
                 # ---------------- FFT (placeholder) ----------------
                 with gr.TabItem("FFT"):
-                    gr.Markdown("TODO: FFT magnitude (log), radial energy, high-frequency ratio")
-                    fft_out = gr.Image(type="numpy", label="FFT output (placeholder)", interactive=False)
+                    with gr.Row():
+                        fft_log = gr.Checkbox(value=True, label="log scale (log1p)")
+                        fft_center = gr.Checkbox(value=True, label="center spectrum (fftshift)")
+                        fft_hf = gr.Slider(
+                            minimum=0.05,
+                            maximum=0.6,
+                            value=0.25,
+                            step=0.05,
+                            label="High-frequency cutoff (radius ratio)",
+                        )
+
+                    fft_out = gr.Image(type="numpy", label="FFT magnitude spectrum", interactive=False)
                     fft_meta = gr.JSON(label="Metadata")
 
-                    fft_btn = gr.Button("Run FFT (placeholder)", variant="primary")
+                    fft_btn = gr.Button("Run FFT", variant="primary")
 
     # --- Button triggers (explicit runs) ---
     lap_btn.click(
@@ -107,8 +119,8 @@ This is a simple tool to visualize and inspect metadata of various computer visi
     )
 
     fft_btn.click(
-        fn=run_fft_placeholder,
-        inputs=[inp],
+        fn=run_fft,
+        inputs=[inp, fft_log, fft_center, fft_hf],
         outputs=[fft_out, fft_meta],
     )
 

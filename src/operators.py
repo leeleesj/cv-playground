@@ -55,6 +55,17 @@ def _gray_to_rgb(gray_u8: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(gray_u8, cv2.COLOR_GRAY2RGB)
 
 
+def _to_uint8_vis(x: np.ndarray, eps: float = 1e-8) -> np.ndarray:
+    """float array -> 0..255 uint8 for visualization."""
+    x = x.astype(np.float32)
+    x_min = float(x.min())
+    x_max = float(x.max())
+    if x_max - x_min < eps:
+        return np.zeros_like(x, dtype=np.uint8)
+    x_norm = (x - x_min) / (x_max - x_min)
+    return (x_norm * 255.0).astype(np.uint8)
+
+
 # ----------------------------
 # Laplacian
 # ----------------------------
@@ -150,3 +161,60 @@ def sobel(
         "dtype": str(img.dtype),
     }
     return vis, meta
+
+
+# ----------------------------
+# FFT
+# ----------------------------
+def fft_spectrum(
+    image_rgb: np.ndarray,
+    log_scale: bool = True,
+    center: bool = True,
+    hf_radius_ratio: float = 0.25,
+    eps: float = 1e-8,
+) -> tuple[np.ndarray, dict]:
+    """
+    FFT magnitude spectrum visualization (log magnitude).
+    Returns:
+      - spectrum_rgb: RGB uint8 image for display
+      - meta: dict with hf_ratio, etc.
+    """
+    if image_rgb is None:
+        return None, {"status": "no_image"}
+
+    img = _ensure_rgb_uint8(image_rgb)
+    gray = _rgb_to_gray(img).astype(np.float32) / 255.0
+    h, w = gray.shape[:2]
+
+    # FFT (complex)
+    F = np.fft.fft2(gray)
+    if center:
+        F = np.fft.fftshift(F)
+
+    mag = np.abs(F)
+
+    # Log magnitude for visualization
+    spec = np.log1p(mag) if log_scale else mag
+    spec_vis = _to_uint8_vis(spec)
+    spectrum_rgb = _gray_to_rgb(spec_vis)
+
+    # High-frequency energy ratio (very simple metric)
+    cy, cx = h // 2, w // 2
+    yy, xx = np.ogrid[:h, :w]
+    rr = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+
+    r0 = hf_radius_ratio * min(h, w)
+    hf_energy = float(mag[rr >= r0].sum())
+    total_energy = float(mag.sum()) + eps
+    hf_ratio = hf_energy / total_energy
+
+    meta = {
+        "status": "ok",
+        "op": "fft_spectrum",
+        "shape_hw": [int(h), int(w)],
+        "log_scale": bool(log_scale),
+        "centered": bool(center),
+        "hf_radius_ratio": float(hf_radius_ratio),
+        "hf_ratio": float(hf_ratio),
+    }
+    return spectrum_rgb, meta
